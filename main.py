@@ -4,13 +4,27 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Plak Radar", layout="wide")
 
+# Özel CSS: Seçilen mağazaların kutularını renklendirmek için
+st.markdown("""
+    <style>
+    .stCheckbox {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #d1d5db;
+        transition: 0.3s;
+    }
+    .stCheckbox:hover {
+        border-color: #ff4b4b;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 st.title("🎯 Plak Radar")
 
-# Arama Kutusu
 query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth Damnation")
 
 def get_links_dict(album):
-    """Mağazaları isim-url ikilisi olarak bir sözlükte tutalım"""
     encoded_query = urllib.parse.quote(album)
     return {
         "Roll Plak": f"https://rollplak.com/index.php?route=product/search&search={encoded_query}&description=true",
@@ -32,44 +46,53 @@ def get_links_dict(album):
 
 if query:
     all_links = get_links_dict(query)
-    store_names = list(all_links.keys())
-
-    # --- Mağaza Seçim Alanı ---
-    st.write("---")
-    selected_stores = st.multiselect(
-        "Arama yapılacak mağazaları seçin:",
-        options=store_names,
-        default=store_names # Başlangıçta hepsi seçili gelsin
-    )
-
-    # --- Butonlar ---
-    col1, col2 = st.columns(2)
     
-    with col1:
-        if st.button("🚀 SEÇİLİ MAĞAZALARI AÇ", use_container_width=True):
-            if selected_stores:
-                # Sadece seçilen mağazaların URL'lerini JS'e gönderiyoruz
-                js_code = "".join([f"window.open('{all_links[s]}', '_blank');" for s in selected_stores])
-                components.html(f"<script>{js_code}</script>", height=0)
-                st.toast(f"{len(selected_stores)} mağaza açılıyor...")
-            else:
-                st.warning("Lütfen en az bir mağaza seçin.")
-
-    with col2:
-        if st.button("🗑️ SEÇİMİ TEMİZLE", use_container_width=True):
-            # Streamlit'in doğası gereği bu buton sayfayı yenileyerek seçimleri sıfırlar
-            st.rerun()
-
-    # --- Alt Kısım: Seçili Mağazaların Bireysel Butonları ---
-    if selected_stores:
-        st.write(f"### Seçili Mağazalar ({len(selected_stores)})")
-        cols = st.columns(5)
-        for idx, store in enumerate(selected_stores):
-            with cols[idx % 5]:
-                st.link_button(store, all_links[store], use_container_width=True)
-    
+    # --- Üst Kontrol Butonları ---
     st.write("---")
-    st.caption("Pop-up engelleyiciyi kapatmayı unutmayın.")
+    col_btn1, col_btn2 = st.columns(2)
+    
+    selected_stores = [] # Seçilenleri burada tutacağız
+
+    with col_btn1:
+        # Bu buton sadece grid'den işaretlediğin mağazaları açar
+        btn_selected = st.button("🚀 SEÇİLİ MAĞAZALARI AÇ", use_container_width=True, type="primary")
+        
+    with col_btn2:
+        # Bu buton seçim ne olursa olsun hepsini açar
+        btn_all = st.button("🌍 TÜM MAĞAZALARI AÇ (HEPSİ)", use_container_width=True)
+
+    # --- Grid Düzeni (Mağaza Seçme Alanı) ---
+    st.write("### Mağaza Seçimi")
+    st.caption("Açmak istediğin mağazaları işaretle:")
+    
+    cols = st.columns(5)
+    for idx, (name, url) in enumerate(all_links.items()):
+        with cols[idx % 5]:
+            # Her mağaza için bir checkbox oluşturuyoruz
+            # Key parametresi hata almamak için önemli
+            is_selected = st.checkbox(name, key=f"check_{idx}")
+            if is_selected:
+                selected_stores.append(url)
+
+    # --- Açma Mantığı (JavaScript Tetikleyicileri) ---
+    
+    # 1. Sadece Seçilileri Aç
+    if btn_selected:
+        if selected_stores:
+            js_code = "".join([f"window.open('{link}', '_blank');" for link in selected_stores])
+            components.html(f"<script>{js_code}</script>", height=0)
+            st.toast(f"{len(selected_stores)} mağaza açılıyor...")
+        else:
+            st.warning("Önce alttaki listeden mağaza seçmelisin!")
+
+    # 2. Tümünü Aç (Seçimden Bağımsız)
+    if btn_all:
+        js_code_all = "".join([f"window.open('{link}', '_blank');" for link in all_links.values()])
+        components.html(f"<script>{js_code_all}</script>", height=0)
+        st.toast("Tüm mağazalar (15 adet) açılıyor...")
+
+    st.write("---")
+    st.info("💡 Mağaza isminin yanındaki kutucuğa tıkla, sonra yukarıdaki 'Seçili Mağazaları Aç' butonuna bas.")
 
 else:
-    st.info("Albüm ismini yazarak başlayın.")
+    st.info("Plak araması yaparak dükkan listesini gör.")
