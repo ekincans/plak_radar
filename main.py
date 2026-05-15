@@ -24,9 +24,16 @@ def google_api_search(search_query):
     try:
         r = requests.get(url, params=params, timeout=10)
         data = r.json()
+        
+        # Hata varsa ekrana bas (Burası sorunu çözecek)
+        if "error" in data:
+            st.error(f"Google Hatası: {data['error']['message']}")
+            return []
+
         results = []
         if "items" in data:
             for item in data["items"]:
+                # ... (geri kalan kod aynı kalsın)
                 site_name = item["displayLink"].replace("www.", "")
                 title = item["title"]
                 link = item["link"]
