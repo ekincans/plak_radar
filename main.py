@@ -2,75 +2,80 @@ import streamlit as st
 import pandas as pd
 import requests
 
-st.set_page_config(page_title="Plak Radar Pro", layout="wide")
+# --- AYARLAR ---
+# API Key'i aldıktan sonra tırnak içine yapıştır
+API_KEY = "AIzaSyDmLEx8zge0VpgVGAMTxXrj-SnihraHCTU" 
+CX = "a7ad9ddff557f4f93"
 
-st.title("🛡️ Plak Radar: Kesin Sonuç Paneli")
-st.write("Google Altyapısı ile dükkan stokları taranıyor...")
+st.set_page_config(page_title="Plak Radar", layout="wide")
+
+st.title("🛡️ Plak Radar: Merkezi Tablo")
+st.write("Google API üzerinden dükkan stokları taranıyor...")
 
 query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth Damnation")
 
-def google_search(search_query, site_url):
-    # Google'ın 'site:' operatörünü kullanarak dükkan bazlı arama yapıyoruz
-    # Bu yöntem bot engelini tamamen aşar
-    api_url = "https://www.google.com/search"
+def google_api_search(search_query):
+    url = "https://www.googleapis.com/customsearch/v1"
     params = {
-        "q": f"site:{site_url} {search_query}",
+        "key": API_KEY,
+        "cx": CX,
+        "q": search_query,
         "hl": "tr"
-    }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
     
     try:
-        r = requests.get(api_url, params=params, headers=headers, timeout=10)
-        # Google sonuçlarını analiz ediyoruz
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(r.text, "html.parser")
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
         
-        # Google'ın bulduğu ilk sonucu alalım
-        result = soup.find("div", class_="g")
-        if result:
-            title = result.find("h3").text if result.find("h3") else "Ürün bulundu"
-            link = result.find("a")["href"]
-            snippet = result.find("div", class_="VwiC3b").text if result.find("div", class_="VwiC3b") else ""
-            
-            # Stok tahmini
-            stok = "Stokta Var"
-            if "tükendi" in snippet.lower() or "stokta yok" in snippet.lower():
-                stok = "Tükendi"
+        results = []
+        if "items" in data:
+            for item in data["items"]:
+                # Site adını temizleyelim
+                site_name = item["displayLink"].replace("www.", "")
                 
-            return {"Mağaza": site_url, "Bulunan Ürün": title, "Durum": stok, "Link": link}
-    except:
-        pass
-    return {"Mağaza": site_url, "Bulunan Ürün": "Sonuç Yok", "Durum": "-", "Link": "#"}
+                # Başlık ve Link
+                title = item["title"]
+                link = item["link"]
+                
+                # Stok durumunu açıklamadan tahmin edelim
+                snippet = item.get("snippet", "").lower()
+                stok = "Stokta Var"
+                if "tükendi" in snippet or "stokta yok" in snippet:
+                    stok = "🔴 Tükendi"
+                else:
+                    stok = "🟢 Stokta"
+                
+                results.append({
+                    "Mağaza": site_name,
+                    "Ürün": title,
+                    "Durum": stok,
+                    "Link": link
+                })
+            return results
+    except Exception as e:
+        st.error(f"API Hatası: {e}")
+    return []
 
-if st.button("Radarı Çalıştır"):
-    if query:
-        # Senin listenin en önemli dükkanları
-        target_sites = [
-            "zihni.com", 
-            "opus3a.com", 
-            "rainbow45records.com", 
-            "hammermuzik.com",
-            "rollplak.com",
-            "atlantis-music.com"
-        ]
-        
-        with st.spinner(f"'{query}' dükkanlarda aranıyor..."):
-            all_data = []
-            for site in target_sites:
-                res = google_search(query, site)
-                all_data.append(res)
+if st.button("Tabloyu Hazırla"):
+    if API_KEY == "AIzaSyDmLEx8zge0VpgVGAMTxXrj-SnihraHCTU":
+        st.error("Lütfen önce API Key'inizi koda ekleyin!")
+    elif query:
+        with st.spinner(f"'{query}' için tüm dükkanlar taranıyor..."):
+            results = google_api_search(query)
             
-            df = pd.DataFrame(all_data)
-            
-            # Tabloyu gösteriyoruz
-            st.dataframe(
-                df,
-                use_container_width=True,
-                column_config={
-                    "Link": st.column_config.LinkColumn("Satın Al / İncele", display_text="Dükkana Git 🔗")
-                }
-            )
+            if results:
+                df = pd.DataFrame(results)
+                # Aynı mağazadan birden fazla sonuç gelirse en üsttekini tutalım
+                df = df.drop_duplicates(subset=['Mağaza'])
+                
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    column_config={
+                        "Link": st.column_config.LinkColumn("Ürün Sayfası", display_text="Dükkana Git 🛒")
+                    }
+                )
+            else:
+                st.info("Sonuç bulunamadı. Aramayı biraz daha detaylandırabilirsin.")
     else:
-        st.warning("Lütfen bir isim girin.")
+        st.warning("Bir isim girin.")
