@@ -4,18 +4,26 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Plak Radar", layout="wide")
 
-# Özel CSS: Seçilen mağazaların kutularını renklendirmek için
+# CSS: Kutuları şeffaf yapıp okunurluğu artırıyoruz
 st.markdown("""
     <style>
-    .stCheckbox {
-        background-color: #f0f2f6;
-        padding: 10px;
-        border-radius: 10px;
+    /* Checkbox konteynerını şeffaf yap */
+    div[data-testid="stCheckbox"] {
+        background-color: transparent !important;
         border: 1px solid #d1d5db;
-        transition: 0.3s;
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition: all 0.2s;
     }
-    .stCheckbox:hover {
+    /* Üzerine gelince çerçeve rengini belirginleştir */
+    div[data-testid="stCheckbox"]:hover {
         border-color: #ff4b4b;
+        background-color: rgba(255, 75, 75, 0.05) !important;
+    }
+    /* Metin rengini sabitle (Okunurluk için) */
+    div[data-testid="stCheckbox"] label {
+        color: inherit !important;
+        font-weight: 500;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -47,52 +55,40 @@ def get_links_dict(album):
 if query:
     all_links = get_links_dict(query)
     
-    # --- Üst Kontrol Butonları ---
     st.write("---")
     col_btn1, col_btn2 = st.columns(2)
     
-    selected_stores = [] # Seçilenleri burada tutacağız
+    selected_stores = []
 
     with col_btn1:
-        # Bu buton sadece grid'den işaretlediğin mağazaları açar
         btn_selected = st.button("🚀 SEÇİLİ MAĞAZALARI AÇ", use_container_width=True, type="primary")
         
     with col_btn2:
-        # Bu buton seçim ne olursa olsun hepsini açar
         btn_all = st.button("🌍 TÜM MAĞAZALARI AÇ (HEPSİ)", use_container_width=True)
 
-    # --- Grid Düzeni (Mağaza Seçme Alanı) ---
     st.write("### Mağaza Seçimi")
-    st.caption("Açmak istediğin mağazaları işaretle:")
     
     cols = st.columns(5)
     for idx, (name, url) in enumerate(all_links.items()):
         with cols[idx % 5]:
-            # Her mağaza için bir checkbox oluşturuyoruz
-            # Key parametresi hata almamak için önemli
+            # Arka plan artık şeffaf, metin rengi temanıza uyumlu
             is_selected = st.checkbox(name, key=f"check_{idx}")
             if is_selected:
                 selected_stores.append(url)
 
-    # --- Açma Mantığı (JavaScript Tetikleyicileri) ---
-    
-    # 1. Sadece Seçilileri Aç
+    # JavaScript Mantığı
     if btn_selected:
         if selected_stores:
             js_code = "".join([f"window.open('{link}', '_blank');" for link in selected_stores])
             components.html(f"<script>{js_code}</script>", height=0)
             st.toast(f"{len(selected_stores)} mağaza açılıyor...")
         else:
-            st.warning("Önce alttaki listeden mağaza seçmelisin!")
+            st.warning("Önce mağaza seçmelisin!")
 
-    # 2. Tümünü Aç (Seçimden Bağımsız)
     if btn_all:
         js_code_all = "".join([f"window.open('{link}', '_blank');" for link in all_links.values()])
         components.html(f"<script>{js_code_all}</script>", height=0)
-        st.toast("Tüm mağazalar (15 adet) açılıyor...")
-
-    st.write("---")
-    st.info("💡 Mağaza isminin yanındaki kutucuğa tıkla, sonra yukarıdaki 'Seçili Mağazaları Aç' butonuna bas.")
+        st.toast("Tüm dükkanlar açılıyor...")
 
 else:
-    st.info("Plak araması yaparak dükkan listesini gör.")
+    st.info("Aradığın plağı yaz, dükkanları seç ve av başlasın!")
