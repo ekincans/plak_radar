@@ -1,60 +1,56 @@
 import streamlit as st
 import pandas as pd
-import requests
-
-# Secrets üzerinden çekiyoruz (Güvenli yöntem)
-API_KEY = st.secrets["GOOGLE_API_KEY"] 
-CX = "a7ad9ddff557f4f93"
+from duckduckgo_search import DDGS
 
 st.set_page_config(page_title="Plak Radar", layout="wide")
 
-st.title("🛡️ Plak Radar: Merkezi Tablo")
-st.write("Google API üzerinden dükkan stokları taranıyor...")
+st.title("🛡️ Plak Radar: Özgür Mod")
+st.write("Google API devreden çıkarıldı. Doğrudan dükkan indeksleri taranıyor...")
 
-query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth Damnation")
+query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth Blackwater Park")
 
-def google_api_search(search_query):
-    url = "https://www.googleapis.com/customsearch/v1"
-    params = {
-        "key": API_KEY,
-        "cx": CX,
-        "q": search_query,
-        "hl": "tr"
-    }
-    try:
-        r = requests.get(url, params=params, timeout=10)
-        data = r.json()
-        
-        # Hata varsa ekrana bas (Burası sorunu çözecek)
-        if "error" in data:
-            st.error(f"Google Hatası: {data['error']['message']}")
-            return []
+def search_plak(album_name):
+    results = []
+    # Bakılacak dükkanların listesi
+    stores = ["zihni.com", "opus3a.com", "rainbow45records.com", "hammermuzik.com", "rollplak.com"]
+    
+    with DDGS() as ddgs:
+        for store in stores:
+            # DuckDuckGo üzerinde 'site:dukkan.com album ismi' araması yapıyoruz
+            search_query = f"site:{store} {album_name}"
+            try:
+                # Sadece ilk sonucu almamız yeterli, en alakalı olan odur
+                ddgs_gen = ddgs.text(search_query, region='tr-tr', safesearch='off', timelimit='y')
+                for r in ddgs_gen:
+                    results.append({
+                        "Mağaza": store,
+                        "Ürün": r['title'],
+                        "Link": r['href'],
+                        "Özet": r['body'][:100] + "..." # Fiyat/stok tahmini için
+                    })
+                    break # Her mağaza için en üstteki sonucu alıp çıkıyoruz
+            except Exception as e:
+                continue
+    return results
 
-        results = []
-        if "items" in data:
-            for item in data["items"]:
-                # ... (geri kalan kod aynı kalsın)
-                site_name = item["displayLink"].replace("www.", "")
-                title = item["title"]
-                link = item["link"]
-                snippet = item.get("snippet", "").lower()
-                stok = "🔴 Tükendi" if "tükendi" in snippet or "stokta yok" in snippet else "🟢 Stokta"
-                results.append({"Mağaza": site_name, "Ürün": title, "Durum": stok, "Link": link})
-            return results
-    except Exception as e:
-        st.error(f"API Hatası: {e}")
-    return []
-
-if st.button("Tabloyu Hazırla"):
+if st.button("Dükkanları Tara"):
     if query:
-        with st.spinner(f"'{query}' taranıyor..."):
-            results = google_api_search(query)
-            if results:
-                df = pd.DataFrame(results).drop_duplicates(subset=['Mağaza'])
-                st.dataframe(df, use_container_width=True, column_config={
-                    "Link": st.column_config.LinkColumn("Ürün Sayfası", display_text="Dükkana Git 🛒")
-                })
+        with st.spinner(f"'{query}' dükkanlarda aranıyor..."):
+            data = search_plak(query)
+            
+            if data:
+                df = pd.DataFrame(data)
+                
+                # Şık bir tablo gösterimi
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    column_config={
+                        "Link": st.column_config.LinkColumn("Satın Al", display_text="Dükkana Git 🛒")
+                    }
+                )
+                st.success(f"{len(data)} mağazada sonuç bulundu!")
             else:
-                st.info("Sonuç bulunamadı.")
+                st.warning("Maalesef hiçbir dükkanda izine rastlayamadık.")
     else:
-        st.warning("Bir isim girin.")
+        st.info("Lütfen bir albüm veya sanatçı ismi yazın.")
