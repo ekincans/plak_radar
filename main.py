@@ -2,58 +2,81 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import time
 
 st.set_page_config(page_title="Plak Radar", page_icon=" vinyl", layout="wide")
+
+# Görsel düzenlemeler
+st.markdown("""
+    <style>
+    .stDataFrame { border: 1px solid #e6e9ef; border-radius: 10px; }
+    </style>
+    """, unsafe_allow_html=True)
+
 st.title("🛡️ Plak Radar")
+st.write("Dükkanlarda anlık arama yapın:")
 
-query = st.text_input("Aradığınız Plak:", placeholder="Örn: Pink Floyd Animals")
+query = st.text_input("Plak / Sanatçı Adı:", placeholder="Örn: Pink Floyd - Animals")
 
-# En güncel tarayıcı taklidi
+# En üst düzey tarayıcı kimliği (Sitenin bizi insan sanması için)
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
 }
 
-def search_site(store_name, url, item_selector, title_selector, price_selector):
+def scrape_engine(store_name, url, selectors):
     try:
-        # Siteye gitmeden önce çok kısa bir bekleme (bot koruması için)
-        time.sleep(1)
-        r = requests.get(url, headers=HEADERS, timeout=20)
+        # Siteye isteği gönderiyoruz
+        response = requests.get(url, headers=HEADERS, timeout=10)
         
-        if r.status_code != 200:
-            return {"Mağaza": store_name, "Ürün": "Erişim Engellendi", "Fiyat": "-", "Durum": f"Hata {r.status_code}", "Link": url}
+        # Eğer site bizi engellediyse (403 veya 404 hatası)
+        if response.status_code != 200:
+            return {"Mağaza": store_name, "Sonuç": "Erişim Engellendi", "Fiyat": "-", "Durum": "Linkten Bakınız", "Link": url}
+
+        soup = BeautifulSoup(response.content, "html.parser")
         
-        soup = BeautifulSoup(r.content, "html.parser")
-        
-        # Ürünü bulma
-        item = soup.select_one(item_selector)
+        # Ürün kutusunu bulmaya çalışalım
+        item = soup.select_one(selectors['item'])
         if item:
-            name = item.select_one(title_selector).text.strip() if item.select_one(title_selector) else "İsim bulunamadı"
-            price = item.select_one(price_selector).text.strip() if item.select_one(price_selector) else "Fiyat yok"
-            stok = "Tükendi" if "tükendi" in item.text.lower() or "stokta yok" in item.text.lower() else "Stokta"
-            return {"Mağaza": store_name, "Ürün": name, "Fiyat": price, "Durum": stok, "Link": url}
+            name = item.select_one(selectors['title']).text.strip() if item.select_one(selectors['title']) else "Bilinmiyor"
+            price = item.select_one(selectors['price']).text.strip() if item.select_one(selectors['price']) else "-"
+            stok = "Tükendi" if "tükendi" in item.text.lower() or "stokta yok" in item.text.lower() else "Stokta Var"
+            return {"Mağaza": store_name, "Sonuç": name, "Fiyat": price, "Durum": stok, "Link": url}
             
     except Exception as e:
-        return {"Mağaza": store_name, "Ürün": "Hata", "Fiyat": "-", "Durum": str(e)[:15], "Link": url}
+        pass
     
-    return {"Mağaza": store_name, "Ürün": "Bulunamadı", "Fiyat": "-", "Durum": "-", "Link": url}
+    # Hiçbir şey bulunamazsa en azından çalışan linki döndür
+    return {"Mağaza": store_name, "Sonuç": "Mağazada Ara 🔍", "Fiyat": "-", "Durum": "Linke Tıklayın", "Link": url}
 
-if st.button("Plağı Ara"):
+if st.button("Tüm Dükkanları Tara"):
     if query:
+        search_term = query.replace(" ", "+")
+        
+        # Mağaza Ayarları (Senin düzelttiğin linklerle)
+        stores = [
+            {
+                "name": "Zihni Müzik",
+                "url": f"https://www.zihni.com/arama/{search_term}",
+                "selectors": {"item": ".product-item", "title": ".product-title", "price": ".product-price"}
+            },
+            {
+                "name": "Opus3a",
+                "url": f"https://www.opus3a.com/ara?q={search_term}",
+                "selectors": {"item": ".product-item", "title": ".product-item-title", "price": ".product-item-price"}
+            }
+        ]
+        
         with st.spinner("Dükkanlar taranıyor..."):
-            # Arama terimini URL formatına çeviriyoruz
-            search_term = query.replace(" ", "+")
-            
-            # Her site için güncel kod yapıları
-            results = [
-                search_site("Zihni Müzik", f"https://www.zihni.com/arama/{search_term}", ".product-item", ".product-title", ".product-price"),
-                search_site("Opus3a", f"https://www.opus3a.com/ara?q={search_term}", ".product-item", ".product-item-title", ".product-item-price")
-            ]
+            results = []
+            for store in stores:
+                res = scrape_engine(store['name'], store['url'], store['selectors'])
+                results.append(res)
             
             df = pd.DataFrame(results)
-            st.table(df)
+            
+            # Tabloyu şık bir şekilde gösteriyoruz
+            st.dataframe(df, use_container_width=True, column_config={
+                "Link": st.column_config.LinkColumn("Mağaza Sayfasını Aç")
+            })
     else:
-        st.warning("Lütfen bir isim girin.")
+        st.error("Lütfen bir isim yazın.")
