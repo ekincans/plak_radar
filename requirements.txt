@@ -1,3 +1,4 @@
 streamlit
-duckduckgo_search
 pandas
+requests
+beautifulsoup4
