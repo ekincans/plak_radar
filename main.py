@@ -1,56 +1,87 @@
 import streamlit as st
 import pandas as pd
-from duckduckgo_search import DDGS
+import requests
+from bs4 import BeautifulSoup
+import time
 
-st.set_page_config(page_title="Plak Radar", layout="wide")
+st.set_page_config(page_title="Plak Radar: Yerli ve Milli", layout="wide")
 
-st.title("🛡️ Plak Radar: Özgür Mod")
-st.write("Google API devreden çıkarıldı. Doğrudan dükkan indeksleri taranıyor...")
+st.title("📦 Plak Radar: Doğrudan Arama")
+st.write("Arama motorlarını aradan çıkardık, dükkanlara doğrudan bağlanıyoruz.")
 
-query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth Blackwater Park")
+query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth Damnation")
 
-def search_plak(album_name):
-    results = []
-    # Bakılacak dükkanların listesi
-    stores = ["zihni.com", "opus3a.com", "rainbow45records.com", "hammermuzik.com", "rollplak.com"]
+def dukkan_tara(site_url, search_path, query):
+    # Gerçek bir tarayıcı gibi görünmek için en kritik parça:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
     
-    with DDGS() as ddgs:
-        for store in stores:
-            # DuckDuckGo üzerinde 'site:dukkan.com album ismi' araması yapıyoruz
-            search_query = f"site:{store} {album_name}"
-            try:
-                # Sadece ilk sonucu almamız yeterli, en alakalı olan odur
-                ddgs_gen = ddgs.text(search_query, region='tr-tr', safesearch='off', timelimit='y')
-                for r in ddgs_gen:
-                    results.append({
-                        "Mağaza": store,
-                        "Ürün": r['title'],
-                        "Link": r['href'],
-                        "Özet": r['body'][:100] + "..." # Fiyat/stok tahmini için
-                    })
-                    break # Her mağaza için en üstteki sonucu alıp çıkıyoruz
-            except Exception as e:
-                continue
-    return results
+    # Boşlukları dükkanın istediği formatta (+ veya %20) değiştiriyoruz
+    formatted_query = query.replace(" ", "+")
+    full_url = f"{site_url}{search_path}{formatted_query}"
+    
+    try:
+        response = requests.get(full_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            return soup, full_url
+    except:
+        pass
+    return None, full_url
 
-if st.button("Dükkanları Tara"):
+def sonuclari_ayikla(dukkan_adi, soup, full_url):
+    # Her dükkanın sayfa yapısı farklı olduğu için burayı özelleştiriyoruz
+    try:
+        if "opus3a" in dukkan_adi:
+            # Opus3a için ilk ürünü bulma mantığı
+            item = soup.select_one(".product-item")
+            if item:
+                title = item.select_one(".product-title").text.strip()
+                price = item.select_one(".product-price").text.strip()
+                return {"Mağaza": "Opus3a", "Ürün": title, "Fiyat": price, "Link": full_url}
+        
+        elif "zihni" in dukkan_adi:
+            item = soup.select_one(".productItem")
+            if item:
+                title = item.select_one(".productName").text.strip()
+                price = item.select_one(".productPrice").text.strip()
+                return {"Mağaza": "Zihni Müzik", "Ürün": title, "Fiyat": price, "Link": full_url}
+        
+        elif "hammer" in dukkan_adi:
+            item = soup.select_one(".product-list-item")
+            if item:
+                title = item.select_one(".product-title").text.strip()
+                return {"Mağaza": "Hammer Müzik", "Ürün": title, "Fiyat": "Bakınız", "Link": full_url}
+    except:
+        pass
+    return None
+
+if st.button("Tabloyu Oluştur"):
     if query:
-        with st.spinner(f"'{query}' dükkanlarda aranıyor..."):
-            data = search_plak(query)
+        # Taranacak dükkan listesi ve arama yolları
+        targets = [
+            {"name": "opus3a", "base": "https://www.opus3a.com", "path": "/arama?q="},
+            {"name": "zihni", "base": "https://www.zihni.com", "path": "/arama?q="},
+            {"name": "hammer", "base": "https://www.hammermuzik.com", "path": "/arama?q="}
+        ]
+        
+        results = []
+        with st.spinner("Dükkan dükkan geziliyor..."):
+            for t in targets:
+                soup, link = dukkan_tara(t["base"], t["path"], query)
+                if soup:
+                    res = sonuclari_ayikla(t["name"], soup, link)
+                    if res:
+                        results.append(res)
+                time.sleep(1) # Banlanmamak için kısa bir bekleme
             
-            if data:
-                df = pd.DataFrame(data)
-                
-                # Şık bir tablo gösterimi
-                st.dataframe(
-                    df,
-                    use_container_width=True,
-                    column_config={
-                        "Link": st.column_config.LinkColumn("Satın Al", display_text="Dükkana Git 🛒")
-                    }
-                )
-                st.success(f"{len(data)} mağazada sonuç bulundu!")
+            if results:
+                df = pd.DataFrame(results)
+                st.dataframe(df, use_container_width=True)
+                st.success("Sonuçlar dükkanların kendi sistemlerinden çekildi!")
             else:
-                st.warning("Maalesef hiçbir dükkanda izine rastlayamadık.")
+                st.error("Dükkanlar şu an yanıt vermiyor veya ürün bulunamadı. Lütfen farklı bir albüm dene.")
     else:
-        st.info("Lütfen bir albüm veya sanatçı ismi yazın.")
+        st.warning("Arama terimi girilmedi.")
