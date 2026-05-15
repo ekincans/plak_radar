@@ -49,8 +49,8 @@ if st.button("Plağı Ara"):
             
             # Her site için güncel kod yapıları
             results = [
-                search_site("Zihni Müzik", f"https://www.zihni.com/arama?q={search_term}", ".product-item", ".product-title", ".product-price"),
-                search_site("Opus3a", f"https://www.opus3a.com/arama?q={search_term}", ".product-item", ".product-item-title", ".product-item-price")
+                search_site("Zihni Müzik", f"https://www.zihni.com/arama/{search_term}", ".product-item", ".product-title", ".product-price"),
+                search_site("Opus3a", f"https://www.opus3a.com/ara?q={search_term}", ".product-item", ".product-item-title", ".product-item-price")
             ]
             
             df = pd.DataFrame(results)
