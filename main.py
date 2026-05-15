@@ -1,44 +1,52 @@
 import streamlit as st
 import pandas as pd
 import urllib.parse
+import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Plak Radar: Dashboard", layout="wide")
+st.set_page_config(page_title="Plak Radar: Multi-Tab", layout="wide")
 
 st.title("🎯 Plak Radar: Hızlı Erişim")
-st.write("Dükkanların bot korumasına takılmadan, doğrudan arama sayfalarına gidin.")
+st.write("Tek tıkla tüm dükkanlarda arama yapın.")
 
 # Arama kutusu
-query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth Blackwater Park")
+query = st.text_input("Aranan Plak/Sanatçı:", placeholder="Örn: Opeth In Cauda Venenum")
 
-def generate_search_links(album):
-    # Dükkan isimleri ve arama linki yapıları
+def get_links(album):
     encoded_query = urllib.parse.quote(album)
-    
     stores = [
-        {"Mağaza": "Zihni Müzik", "URL": f"https://www.zihni.com/arama?q={encoded_query}"},
-        {"Mağaza": "Opus3a", "URL": f"https://www.opus3a.com/arama?q={encoded_query}"},
-        {"Mağaza": "Hammer Müzik", "URL": f"https://www.hammermuzik.com/arama?q={encoded_query}"},
-        {"Mağaza": "Rainbow45", "URL": f"https://www.rainbow45records.com/arama?q={encoded_query}"},
-        {"Mağaza": "Roll Plak", "URL": f"https://www.rollplak.com/arama?q={encoded_query}"},
-        {"Mağaza": "Kont Plak", "URL": f"https://www.kontplak.com/search?q={encoded_query}"},
-        {"Mağaza": "Discogs (Global)", "URL": f"https://www.discogs.com/search/?q={encoded_query}&type=release"}
+        {"name": "Zihni Müzik", "url": f"https://www.zihni.com/arama?q={encoded_query}"},
+        {"name": "Opus3a", "url": f"https://www.opus3a.com/ara?q={encoded_query}"},
+        {"name": "Hammer Müzik", "url": f"https://www.hammermuzik.com/arama?q={encoded_query}"},
+        {"name": "Rainbow45", "url": f"https://www.rainbow45records.com/arama?q={encoded_query}"},
+        {"name": "Roll Plak", "url": f"https://www.rollplak.com/arama?q={encoded_query}"},
+        {"name": "Kont Plak", "url": f"https://www.kontplak.com/search?q={encoded_query}"},
+        {"name": "Discogs", "url": f"https://www.discogs.com/search/?q={encoded_query}&type=release"}
     ]
     return stores
 
 if query:
-    st.subheader(f"'{query}' için Hazırlanan Linkler")
-    links = generate_search_links(query)
+    links_data = get_links(query)
     
-    # Şık bir tablo ve butonlar
-    for link in links:
+    # 1. Bireysel Butonlar (Tablo Görünümü)
+    st.subheader("Mağaza Linkleri")
+    for item in links_data:
         col1, col2 = st.columns([1, 4])
         with col1:
-            st.write(f"**")
+            st.write(f"**{item['name']}**")
         with col2:
-            st.link_button(f"{link['Mağaza']} dükkanında ara 🔍", link['URL'])
-    
+            st.link_button(f"{item['name']} sayfasını aç", item['url'])
+
     st.divider()
-    st.info("💡 Yukarıdaki butonlara bastığında dükkanın arama sonuçları yeni sekmede açılır. Bot korumasına takılmazsın çünkü aramayı dükkanın kendi sitesinde yapmış olursun.")
+
+    # 2. "Hepsini Aynı Anda Aç" Butonu
+    st.subheader("🚀 Komando Modu")
+    st.warning("⚠️ Not: Tarayıcınız sekmelerin açılmasını engellerse, adres çubuğunun sağındaki 'Pop-up engelleyici' ikonuna tıklayıp bu siteye izin verin.")
+    
+    if st.button("Tüm Mağazaları Yeni Sekmelerde Aç"):
+        # JavaScript ile tüm linkleri tek tek açma komutu
+        js_code = "".join([f"window.open('{item['url']}', '_blank');" for item in links_data])
+        components.html(f"<script>{js_code}</script>", height=0)
+        st.success("Tüm sekmeler tetiklendi!")
 
 else:
-    st.info("Aramak istediğin albüm veya sanatçı ismini yukarıya yaz.")
+    st.info("Aramak istediğin albümü yazınca dükkan linkleri burada belirecek.")
