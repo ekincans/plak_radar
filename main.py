@@ -2,65 +2,58 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import time
 
 st.set_page_config(page_title="Plak Radar", page_icon=" vinyl", layout="wide")
-
 st.title("🛡️ Plak Radar")
-st.write("Zihni.com ve Opus3a stoklarını anlık tarar.")
 
-query = st.text_input("Aradığınız Plak:", placeholder="Örn: Led Zeppelin IV")
+query = st.text_input("Aradığınız Plak:", placeholder="Örn: Pink Floyd Animals")
 
-# Daha güçlü bir kimlik bilgisi
+# En güncel tarayıcı taklidi
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
 }
 
-def scrape_zihni(query):
+def search_site(store_name, url, item_selector, title_selector, price_selector):
     try:
-        # Yeni güncel adres: zihni.com
-        url = f"https://www.zihni.com/arama?q={query.replace(' ', '+')}"
-        r = requests.get(url, headers=HEADERS, timeout=15)
+        # Siteye gitmeden önce çok kısa bir bekleme (bot koruması için)
+        time.sleep(1)
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        
+        if r.status_code != 200:
+            return {"Mağaza": store_name, "Ürün": "Erişim Engellendi", "Fiyat": "-", "Durum": f"Hata {r.status_code}", "Link": url}
+        
         soup = BeautifulSoup(r.content, "html.parser")
         
-        # Ürün kutusunu bulalım
-        item = soup.select_one(".product-item")
+        # Ürünü bulma
+        item = soup.select_one(item_selector)
         if item:
-            name = item.select_one(".product-title").text.strip()
-            price = item.select_one(".product-price").text.strip()
-            # Stok kontrolü: "Tükendi" ibaresi yoksa stokta varsayıyoruz
-            stok = "Tükendi" if "tükendi" in item.text.lower() else "Stokta"
-            return {"Mağaza": "Zihni Müzik", "Ürün": name, "Fiyat": price, "Durum": stok, "Link": url}
+            name = item.select_one(title_selector).text.strip() if item.select_one(title_selector) else "İsim bulunamadı"
+            price = item.select_one(price_selector).text.strip() if item.select_one(price_selector) else "Fiyat yok"
+            stok = "Tükendi" if "tükendi" in item.text.lower() or "stokta yok" in item.text.lower() else "Stokta"
+            return {"Mağaza": store_name, "Ürün": name, "Fiyat": price, "Durum": stok, "Link": url}
+            
     except Exception as e:
-        return {"Mağaza": "Zihni Müzik", "Ürün": "Hata oluştu", "Fiyat": "-", "Durum": "Erişim Sorunu", "Link": url}
-    return {"Mağaza": "Zihni Müzik", "Ürün": "Bulunamadı", "Fiyat": "-", "Durum": "-", "Link": url}
-
-def scrape_opus3a(query):
-    try:
-        url = f"https://www.opus3a.com/arama?q={query.replace(' ', '+')}"
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(r.content, "html.parser")
-        
-        item = soup.select_one(".product-item")
-        if item:
-            name = item.select_one(".product-item-title").text.strip()
-            price = item.select_one(".product-item-price").text.strip()
-            # Sepete ekle butonu varsa stokta demektir
-            stok = "Stokta" if item.select_one(".add-to-cart") else "Tükendi"
-            return {"Mağaza": "Opus3a", "Ürün": name, "Fiyat": price, "Durum": stok, "Link": url}
-    except Exception as e:
-        return {"Mağaza": "Opus3a", "Ürün": "Hata oluştu", "Fiyat": "-", "Durum": "Erişim Sorunu", "Link": url}
-    return {"Mağaza": "Opus3a", "Ürün": "Bulunamadı", "Fiyat": "-", "Durum": "-", "Link": url}
+        return {"Mağaza": store_name, "Ürün": "Hata", "Fiyat": "-", "Durum": str(e)[:15], "Link": url}
+    
+    return {"Mağaza": store_name, "Ürün": "Bulunamadı", "Fiyat": "-", "Durum": "-", "Link": url}
 
 if st.button("Plağı Ara"):
     if query:
-        with st.spinner(f"'{query}' aranıyor..."):
-            results = [scrape_zihni(query), scrape_opus3a(query)]
+        with st.spinner("Dükkanlar taranıyor..."):
+            # Arama terimini URL formatına çeviriyoruz
+            search_term = query.replace(" ", "+")
+            
+            # Her site için güncel kod yapıları
+            results = [
+                search_site("Zihni Müzik", f"https://www.zihni.com/arama?q={search_term}", ".product-item", ".product-title", ".product-price"),
+                search_site("Opus3a", f"https://www.opus3a.com/arama?q={search_term}", ".product-item", ".product-item-title", ".product-item-price")
+            ]
             
             df = pd.DataFrame(results)
-            # Sonuçları göster
-            st.dataframe(df, use_container_width=True, column_config={
-                "Link": st.column_config.LinkColumn("Mağazaya Git")
-            })
+            st.table(df)
     else:
-        st.warning("Lütfen bir plak adı girin.")
+        st.warning("Lütfen bir isim girin.")
