@@ -4,7 +4,7 @@ import requests
 
 # --- AYARLAR ---
 # API Key'i aldıktan sonra tırnak içine yapıştır
-API_KEY = "AIzaSyDmLEx8zge0VpgVGAMTxXrj-SnihraHCTU" 
+API_KEY = st.secrets["GOOGLE_API_KEY"] 
 CX = "a7ad9ddff557f4f93"
 
 st.set_page_config(page_title="Plak Radar", layout="wide")
@@ -57,8 +57,9 @@ def google_api_search(search_query):
     return []
 
 if st.button("Tabloyu Hazırla"):
-    if API_KEY == "AIzaSyDmLEx8zge0VpgVGAMTxXrj-SnihraHCTU":
-        st.error("Lütfen önce API Key'inizi koda ekleyin!")
+    # Yeni ve güvenli hali:
+if not API_KEY:
+    st.error("API Anahtarı bulunamadı! Lütfen Streamlit Secrets ayarlarını kontrol edin.")
     elif query:
         with st.spinner(f"'{query}' için tüm dükkanlar taranıyor..."):
             results = google_api_search(query)
