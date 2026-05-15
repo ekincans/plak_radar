@@ -49,7 +49,8 @@ def get_links_dict(album):
         "TLPMA": f"https://tlpma.com.tr/shop/?s={encoded_query}&post_type=product&stock_status=instock,onsale",
         "Plak İstasyonu": f"https://www.plakistasyonu.com/arama/{encoded_query}?stockOnly=1&sort=",
         "Pera Plak": f"https://www.peraplak.com/arama/{encoded_query}?stockOnly=1&sort=",
-        "Beat Sommelier": f"https://www.beatsommelier.com/search?q={encoded_query}&sort_by=relevance&filter.v.availability=1"
+        "Beat Sommelier": f"https://www.beatsommelier.com/search?q={encoded_query}&sort_by=relevance&filter.v.availability=1",
+        "Zuhal Müzik": f"https://www.zuhalmuzik.com/searchpage?page=1&q={encoded_query}"
     }
 
 if query:
